@@ -7,7 +7,7 @@
 #include <MKRWAN.h>
 #include <Arduino_MKRENV.h>
 
-// Instanciación del modulo Murata
+// Murata radio module initialization
 LoRaModem modem(Serial1);
 
 #include "arduino_secrets.h"
@@ -22,23 +22,23 @@ void setup() {
   while (!Serial);
 
   // Regional band (eg. US915, AS923, ...)
-  Serial.println("Iniciando modulo de radio (US915)...");
+  Serial.println("Initializating radio module (US915)...");
   if (!modem.begin(US915)) {
-    Serial.println("Fallo al iniciar el modulo");
+    Serial.println("Failure, try again");
     while (1) {}
   };
-  //Imprime los datos del dispositivo
+  //Print the device EUI
   radioModuleStarted();
  
 
-  // Autenticacion OTAA
-  Serial.println("Iniciando activacion OTAA...");
+  //OTAA Authentication
+  Serial.println("Initializing OTAA activation.");
   int connected = modem.joinOTAA(appEui, appKey);
   if (!connected) {
-    Serial.println("Activacion OTAA fallida, intente de nuevo");
+    Serial.println("Failure, try again");
     while (1) {}
   }
-  Serial.println("Activacion OTAA satisfactoria");
+  Serial.println("OTAA activation sucessfull");
 
 
   // Set poll interval to 60 secs.
@@ -47,18 +47,18 @@ void setup() {
   // not allow to send more than one message every 2 minutes,
   // this is enforced by firmware and can not be changed.
 
-  //Se inicializa el shield MKR ENV
-  Serial.println("Iniciando MKR ENV SHIELD");
+  //Initialize MKR ENV module
+  Serial.println("Initializing MKR ENV SHIELD");
   if (!ENV.begin()) {
-    Serial.println("Falla al inicializar el MKR ENV shield!");
+    Serial.println("Failure, try again");
     while (1);
   }
-  Serial.println("ENV Shield iniciado correctamente");
+  Serial.println("MKR ENV initialized successfully");
 }
 
 void loop() {
  
-  // Se leen todos los sensores
+  //Read all MKR ENV sensor values
   float temperature = ENV.readTemperature();
   float humidity    = ENV.readHumidity();
   float pressure    = ENV.readPressure();
@@ -67,15 +67,14 @@ void loop() {
   float uvb         = ENV.readUVB();
   float uvIndex     = ENV.readUVIndex(); 
 
-  //Se impreme por el monitor sería los datos adquiridos por los sensores y su equivalente HEX
   printSensorsData(temperature, humidity, pressure, illuminance, uva, uvb, uvIndex);
 
-  //Serialización de los datos de los sensores
+  //Sensor data serialization
   //float = 32 bits (4bytes)
-  //Resolucion HTS221 temperatura y humedad = 16 bits
-  //Resolucion LPS22HB presion = 24 bits
-  //Resolucion TEMT6000 = 32 bits
-  //Resolucion VEML6075 = 16 bits
+  //Resolution HTS221 temperature and humidity = 16 bits
+  //Resolution LPS22HB presion = 24 bits
+  //Resolution TEMT6000 = 32 bits
+  //Resolution VEML6075 = 16 bits
 
   byte temp[4];
   float2Bytes(temp,temperature); 
@@ -117,20 +116,7 @@ void loop() {
   Serial.print("UV Index Bytes: ");
   printBytes(uvi);
   
-  //byte payload[sizeofTemp+sizeofHumi+sizeofPres+sizeofIllu+sizeofUax+sizeofUbx+sizeofUvi];
   byte payload[(sensor*7)];
-  
-  //int payloadSize = sizeof(payload);
-  //Serial.print("Size of payload: ");
-  //Serial.println(payloadSize);
-
-  //memcpy(payload, temp, sizeofTemp);
-  //memcpy(payload + sizeofTemp, humi, sizeofHumi);
-  //memcpy(payload + sizeofTemp + sizeofHumi, pres, sizeofPres);
-  //memcpy(payload + sizeofTemp + sizeofHumi + sizeofPres, illu, sizeofIllu);
-  //memcpy(payload + sizeofTemp + sizeofHumi + sizeofPres + sizeofIllu, uax, sizeofUax);
-  //memcpy(payload + sizeofTemp + sizeofHumi + sizeofPres + sizeofIllu + sizeofUax, ubx, sizeofUbx);
-  //memcpy(payload + sizeofTemp + sizeofHumi + sizeofPres + sizeofIllu + sizeofUax + sizeofUbx, uvi, sizeofUvi);
 
   memcpy(payload, temp, sensor);
   memcpy(payload+(sensor*1), humi, sensor);
@@ -146,34 +132,30 @@ void loop() {
   Serial.write(payload, sizeof(payload));
   Serial.println();
   
-  //Se transmite el mensaje el mensaje
+  //Message transmission
   int err;
   modem.beginPacket();
   modem.write(payload, sizeof(payload));
   err = modem.endPacket(true);
   if (err > 0) {
-    Serial.println("Mensaje enviado correctamente!");
+    Serial.println("Message transmited succesfully!");
   } else {
-    Serial.println("Error al enviar el mensaje");
+    Serial.println("Error sending the message");
   }
 
-  //Se imprimer el contador de los mensajes uplink
-  Serial.print("Contador uplink: ");
+  Serial.print("Uplink message counter: ");
   Serial.println(fcount);
   fcount++;
 
-  //Se revisa el buffer de recepción
+  //Check buffer for downlink message received
   if (!modem.available()) {
-    Serial.println("No se ha recibido un mensaje downlink en estas ventanas de recepción.");
+    Serial.println("Not dowlink message received.");
     Serial.println();
-    Serial.println("_____________________________________________________________");
-    //Se enviarán los datos cada 100 segundos
-    delay(50000);
-  
+    Serial.println("_____________________________________________________________");  
     return;
   }
 
-  // Si se recibe un mensaje se lo muestra por el monitor serie
+  //If a message is received it is shown on the serial monitor
   char rcv[64];
   int i = 0;
   while (modem.available()) {
@@ -188,8 +170,9 @@ void loop() {
   
   Serial.println();
   Serial.println("_____________________________________________________________");
-  //Se enviarán los datos cada 100 segundos
-  delay(50000);
+  
+  //We will gonna send uplink messages every minute as a test but check each country radio frecuency regulations to avoid troubles.
+  delay(60000);
 
 }
 
@@ -267,9 +250,6 @@ void float2Bytes(byte bytes_sensor[4],float float_variable){
 
 void printBytes(byte sensor[4]){
   int sizeArray = sizeof(sensor);
-  //Serial.print("Array size: ");
-  //Serial.println(sizeArray);
-  //Serial.print("Array content: ");
   Serial.write(sensor, sizeArray);
   Serial.println();
 }
